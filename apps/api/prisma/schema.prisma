@@ -1,0 +1,216 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  ORGANIZER
+  ADMINISTRATOR
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  REMOVED
+}
+
+enum LostFoundKind {
+  LOST
+  FOUND
+}
+
+enum LostFoundStatus {
+  OPEN
+  RESOLVED
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+enum ReportTargetType {
+  LISTING
+  LOST_FOUND_POST
+  EVENT
+  USER
+  MESSAGE
+}
+
+enum ReportStatus {
+  OPEN
+  ACTIONED
+  DISMISSED
+}
+
+model User {
+  id              String     @id @default(cuid())
+  email           String     @unique
+  emailVerifiedAt DateTime?
+  passwordHash    String
+  role            Role       @default(STUDENT)
+  status          UserStatus @default(PENDING)
+  createdAt       DateTime   @default(now())
+
+  profile            Profile?
+  listings           Listing[]
+  participants       Participant[]
+  sentMessages       Message[]         @relation("MessageSender")
+  lostFoundPosts     LostFoundPost[]
+  organizedEvents    Event[]
+  rsvps              Rsvp[]
+  reportsFiled       Report[]          @relation("ReportReporter")
+  moderationActions  ModerationAction[] @relation("ModerationAdmin")
+}
+
+model Profile {
+  userId      String   @id
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName String
+  program     String?
+  yearOfStudy Int?
+  bio         String?
+  avatarUrl   String?
+  interests   String[]
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String
+  slug     String    @unique
+  listings Listing[]
+}
+
+model Listing {
+  id          String        @id @default(cuid())
+  sellerId    String
+  seller      User          @relation(fields: [sellerId], references: [id])
+  categoryId  String
+  category    Category      @relation(fields: [categoryId], references: [id])
+  title       String
+  description String
+  priceCents  Int
+  condition   String
+  status      ListingStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  archivedAt  DateTime?
+
+  images        ListingImage[]
+  conversations Conversation[]
+
+  @@index([status])
+  @@index([categoryId])
+}
+
+model ListingImage {
+  id        String  @id @default(cuid())
+  listingId String
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  url       String
+  sortOrder Int     @default(0)
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  listingId String?
+  listing   Listing? @relation(fields: [listingId], references: [id])
+  createdAt DateTime @default(now())
+
+  participants Participant[]
+  messages     Message[]
+}
+
+model Participant {
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@id([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id])
+  body           String
+  sentAt         DateTime     @default(now())
+  readAt         DateTime?
+}
+
+model LostFoundPost {
+  id          String          @id @default(cuid())
+  authorId    String
+  author      User            @relation(fields: [authorId], references: [id])
+  kind        LostFoundKind
+  title       String
+  description String
+  location    String
+  occurredOn  DateTime
+  imageUrl    String?
+  status      LostFoundStatus @default(OPEN)
+  createdAt   DateTime        @default(now())
+}
+
+model Event {
+  id          String      @id @default(cuid())
+  organizerId String
+  organizer   User        @relation(fields: [organizerId], references: [id])
+  title       String
+  description String
+  startsAt    DateTime
+  endsAt      DateTime
+  location    String
+  imageUrl    String?
+  status      EventStatus @default(DRAFT)
+
+  rsvps Rsvp[]
+}
+
+model Rsvp {
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  respondedAt DateTime @default(now())
+
+  @@id([eventId, userId])
+}
+
+model Report {
+  id         String           @id @default(cuid())
+  reporterId String
+  reporter   User             @relation("ReportReporter", fields: [reporterId], references: [id])
+  targetType ReportTargetType
+  targetId   String
+  reason     String
+  status     ReportStatus     @default(OPEN)
+  createdAt  DateTime         @default(now())
+
+  moderationActions ModerationAction[]
+}
+
+model ModerationAction {
+  id        String   @id @default(cuid())
+  adminId   String
+  admin     User     @relation("ModerationAdmin", fields: [adminId], references: [id])
+  reportId  String
+  report    Report   @relation(fields: [reportId], references: [id])
+  action    String
+  note      String?
+  createdAt DateTime @default(now())
+}
